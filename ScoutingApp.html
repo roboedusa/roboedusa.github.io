@@ -1,0 +1,262 @@
+<html>
+  <head>
+    <style>
+      #rankings-table {
+        margin-bottom: 20px; /* add some space between the rankings and chart */
+      }
+      #chartTable {
+        clear: both; /* move the chart below the rankings table */
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Scouting App/Website</h1>
+    <h4>Input the event SKU/Code, only need the last 4 numbers</h4>
+    <input type="text" id="eventcode" name="eventcode" placeholder="Enter SKU/Code">
+    <button id="enter" onclick="getID()">Find Event</button>
+    <br>
+    <br>
+    <div id="rankings-table"></div>
+    <div id="offline-message" style="display: none;">
+      <h2>You are offline</h2>
+      <p>You are not connected to the internet. Please check your network connection.</p>
+    </div>
+    <table id="chartTable" border="1"></table>
+
+    <script>
+      let eventid;
+      let teamnum;
+      let eventinfo;
+
+      async function fetchEventData() {
+        try {
+          response = await fetch(`https://www.robotevents.com/api/v2/events?sku%5B%5D=RE-V5RC-24-${document.getElementById("eventcode").value}&myEvents=false`, {
+            headers: {
+              'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIzIiwianRpIjoiZDNiYzU1Y2I5Y2UxZjc2NzU4ZWJhZDk1NmUwMDRkZjJkZTQ0NWViY2QzZTc0NzFhMTNmMjIxNWNlYTg3ODM4ZDY3MTU5NzUyYzQ1YmRmOTkiLCJpYXQiOjE3MjA1OTE3NzMuMTM2MzM0OSwibmJmIjoxNzIwNTkxNzczLjEzNjMzOCwiZXhwIjoyNjY3MjgwMTczLjEyMTY1NzgsInN1YiI6IjY4MzkiLCJzY29wZXMiOltdfQ.N-ZRKEpC7tYftM7J7KWsz4zIA3tEiH8jpvd3VqrOqg5VAMqq7ryZD7dzcq4USQbu1ExCFgVxudblarjy7AJZe-YhMelA3TzgFYfH7BehrMrYqCX4dQ_4HJGyWYtSXx29cvxfLAtTmXeZVrFjEpdgY63DkxOor3npD65gaSpQxFO3USSQHaA8HPTJw2l_gEkT1PDvBf4-QIwQYm3Pj_klOw7cdoJnJgziDKLsPPHfe6os6rkf6wIKszsa1O7AuAM0aYV3tXsFWcOX6m_okjmmoFpSKpFv3UQ9W9IiTr4iXKrMRhT-jV7CQwXboc9Vl8YBoDwwyV-reDbSVf_k6bVhHdV3mglMlk-EklX-iPbl88Lkedji0mB7WHQ-R7Nib4XagJm_vxHRNWIvQNleIOm5pIBCcjnWOTWF4l2zGPuybSE3w3NHncwa88Ion0hK8ktKQl8Wx1A8aJWHk0IDNLVelt_vtbhbbDRml7EFbeYJ-o2V8ZbZWY3PGklsp3q5X9A0snE4W4Sv9061sURDaV9QsB38Eyg2J6PjyP7p3rvOw903RntP4AWrWIlSyqn9ZKdHnjqQ94JWzswYNYvP86sm6GAuh_mPcXxRyYzIjAVdYuTy_mtvb38FaRDiwSG4aM9F3yHHwUjrXZ_FoEpF7bOLaVFuntUXJwkmecE-g3Fd2RU'
+            }
+          });
+          if (!response.ok) {
+            throw new Error("Could not find event");
+          }
+          eventinfo = await response.json();
+          eventid = eventinfo.data.at(0).id;
+          return {eventid,eventdata:eventinfo.data.at(0)};
+        } catch (error) {
+          console.error(error);
+        }
+      }
+      function displayOfflineMessage() {
+        document.getElementById('offline-message').style.display = 'block';
+      }
+      async function refreshData() {//Refresh the divisions for ranking
+        try {
+          const {eventid, eventdata}=await fetchEventData();
+          localStorage.setItem('eventid', eventid);
+          const divs = eventdata.divisions;
+          for(division of divs){
+            const divId=division.id;
+            const divName=division.name;
+            document.getElementById("rankings-table").innerHTML = await getRankings(divId);
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      }
+      
+      async function chart(){
+        try{
+          createChart();
+        }catch(error){
+          console.error(error);
+        }
+      }
+
+      async function getID() {
+        try {
+          await refreshData();  
+          await chart();
+          // Listen for network changes
+          window.addEventListener('online', () => {
+          eventid = localStorage.getItem('eventid');
+          document.getElementById('offline-message').style.display = 'none'; // Hide offline message
+          setInterval(refreshData,60000); // Call refreshData function when coming online every minute
+        });
+
+        window.addEventListener('offline', () => {
+          document.getElementById('offline-message').style.display = 'block'; // Show offline message
+        });
+        setInterval(refreshData,60000); //Call refreshData function when always online every minute
+        } catch (error) {
+          console.error(error);
+        }
+      }
+      async function fetchAllTeams() {
+        try{
+        response = await fetch(
+          `https://www.robotevents.com/api/v2/events/${eventid}/teams?myTeams=false`,{
+            headers:{
+              'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIzIiwianRpIjoiZDNiYzU1Y2I5Y2UxZjc2NzU4ZWJhZDk1NmUwMDRkZjJkZTQ0NWViY2QzZTc0NzFhMTNmMjIxNWNlYTg3ODM4ZDY3MTU5NzUyYzQ1YmRmOTkiLCJpYXQiOjE3MjA1OTE3NzMuMTM2MzM0OSwibmJmIjoxNzIwNTkxNzczLjEzNjMzOCwiZXhwIjoyNjY3MjgwMTczLjEyMTY1NzgsInN1YiI6IjY4MzkiLCJzY29wZXMiOltdfQ.N-ZRKEpC7tYftM7J7KWsz4zIA3tEiH8jpvd3VqrOqg5VAMqq7ryZD7dzcq4USQbu1ExCFgVxudblarjy7AJZe-YhMelA3TzgFYfH7BehrMrYqCX4dQ_4HJGyWYtSXx29cvxfLAtTmXeZVrFjEpdgY63DkxOor3npD65gaSpQxFO3USSQHaA8HPTJw2l_gEkT1PDvBf4-QIwQYm3Pj_klOw7cdoJnJgziDKLsPPHfe6os6rkf6wIKszsa1O7AuAM0aYV3tXsFWcOX6m_okjmmoFpSKpFv3UQ9W9IiTr4iXKrMRhT-jV7CQwXboc9Vl8YBoDwwyV-reDbSVf_k6bVhHdV3mglMlk-EklX-iPbl88Lkedji0mB7WHQ-R7Nib4XagJm_vxHRNWIvQNleIOm5pIBCcjnWOTWF4l2zGPuybSE3w3NHncwa88Ion0hK8ktKQl8Wx1A8aJWHk0IDNLVelt_vtbhbbDRml7EFbeYJ-o2V8ZbZWY3PGklsp3q5X9A0snE4W4Sv9061sURDaV9QsB38Eyg2J6PjyP7p3rvOw903RntP4AWrWIlSyqn9ZKdHnjqQ94JWzswYNYvP86sm6GAuh_mPcXxRyYzIjAVdYuTy_mtvb38FaRDiwSG4aM9F3yHHwUjrXZ_FoEpF7bOLaVFuntUXJwkmecE-g3Fd2RU'
+            }
+          }
+        );
+        data = await response.json();
+        totalPages = data.meta.last_page;
+        allTeams = [];
+
+        for (let page = 1; page <= totalPages; page++) {
+          teams = await fetchTeams(page);
+          allTeams.push(...teams);
+        }
+      }
+        catch(error){
+          console.error(error);
+        }
+        return allTeams;
+      }
+
+      async function fetchTeams(page) {
+        try{
+        response = await fetch(
+          `https://www.robotevents.com/api/v2/events/${eventid}/teams?myTeams=false&page=${page}`,{
+          headers:{
+            'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIzIiwianRpIjoiZDNiYzU1Y2I5Y2UxZjc2NzU4ZWJhZDk1NmUwMDRkZjJkZTQ0NWViY2QzZTc0NzFhMTNmMjIxNWNlYTg3ODM4ZDY3MTU5NzUyYzQ1YmRmOTkiLCJpYXQiOjE3MjA1OTE3NzMuMTM2MzM0OSwibmJmIjoxNzIwNTkxNzczLjEzNjMzOCwiZXhwIjoyNjY3MjgwMTczLjEyMTY1NzgsInN1YiI6IjY4MzkiLCJzY29wZXMiOltdfQ.N-ZRKEpC7tYftM7J7KWsz4zIA3tEiH8jpvd3VqrOqg5VAMqq7ryZD7dzcq4USQbu1ExCFgVxudblarjy7AJZe-YhMelA3TzgFYfH7BehrMrYqCX4dQ_4HJGyWYtSXx29cvxfLAtTmXeZVrFjEpdgY63DkxOor3npD65gaSpQxFO3USSQHaA8HPTJw2l_gEkT1PDvBf4-QIwQYm3Pj_klOw7cdoJnJgziDKLsPPHfe6os6rkf6wIKszsa1O7AuAM0aYV3tXsFWcOX6m_okjmmoFpSKpFv3UQ9W9IiTr4iXKrMRhT-jV7CQwXboc9Vl8YBoDwwyV-reDbSVf_k6bVhHdV3mglMlk-EklX-iPbl88Lkedji0mB7WHQ-R7Nib4XagJm_vxHRNWIvQNleIOm5pIBCcjnWOTWF4l2zGPuybSE3w3NHncwa88Ion0hK8ktKQl8Wx1A8aJWHk0IDNLVelt_vtbhbbDRml7EFbeYJ-o2V8ZbZWY3PGklsp3q5X9A0snE4W4Sv9061sURDaV9QsB38Eyg2J6PjyP7p3rvOw903RntP4AWrWIlSyqn9ZKdHnjqQ94JWzswYNYvP86sm6GAuh_mPcXxRyYzIjAVdYuTy_mtvb38FaRDiwSG4aM9F3yHHwUjrXZ_FoEpF7bOLaVFuntUXJwkmecE-g3Fd2RU'
+          }
+        }
+        );
+      } catch(error){
+        console.error(error);
+      }
+        const data = await response.json();
+        return data.data;
+      }
+        
+        async function createChart() {
+            const chartTable = document.getElementById("chartTable");
+            const allTeams= await fetchAllTeams();
+            if (chartTable.rows.length > 0) { // Check if chart table already exists
+              chartTable.innerHTML = ""; // Clear the chart table
+            }
+
+            // Create the header row
+            const headerRow = document.createElement("tr");
+            const headers = ["Team Name", "Team Number","Bot Description", "Bot Picture", "Auton Winpoint", "Climb"];
+            headers.forEach((header) => {
+              const th = document.createElement("th");
+              th.textContent = header;
+              th.style.border = "1px solid black";
+              headerRow.appendChild(th);
+            });
+            chartTable.appendChild(headerRow);  
+
+            // Create the rows
+            allTeams.forEach((teamInfo)=>{
+              const row = document.createElement("tr");
+
+              // Create all the cells first
+              const teamNameCell = document.createElement("td");
+              const teamNumberCell = document.createElement("td");
+              const botDescriptionCell = document.createElement("td");
+              const botPictureCell = document.createElement("td");
+              const autonWinpointCell = document.createElement("td");
+              const climbCell = document.createElement("td");
+
+              // Fill in the values using async/await
+              teamNameCell.textContent = teamInfo.team_name;
+              teamNumberCell.textContent = teamInfo.number;
+              const inputElement = document.createElement("textarea");
+              inputElement.style.width = "100%";
+              inputElement.style.height = "100px";
+              inputElement.style.boxSizing = "border-box";
+              inputElement.style.overflowWrap = "break-word";
+              inputElement.style.wordWrap = "break-word";
+              inputElement.style.whiteSpace = "pre-wrap";
+              botDescriptionCell.appendChild(inputElement);
+              row.appendChild(botDescriptionCell);
+
+              const botPictureInput = document.createElement("input");
+              botPictureInput.type = "file";
+              botPictureInput.accept = "image/*"; // Allow only image files
+              botPictureInput.style.display = "block"; // Show the input field initially
+              botPictureInput.addEventListener("change", (e) => {
+                const file = e.target.files[0];
+                const reader = new FileReader();
+                reader.onload = () => {
+                  const botPicture = document.createElement("img");
+                  botPicture.src = reader.result;
+                  botPicture.style.width = "50px";
+                  botPicture.style.height = "50px";
+                  botPictureCell.appendChild(botPicture);
+                  botPictureInput.style.display = "none"; // Hide the input field after file selection
+                };
+                reader.readAsDataURL(file);
+              });
+              botPictureCell.appendChild(botPictureInput);
+              row.appendChild(botPictureCell);
+              row.appendChild(teamNameCell);
+              row.appendChild(teamNumberCell);
+              row.appendChild(botDescriptionCell);
+              row.appendChild(botPictureCell);
+
+              // Add empty cells for the remaining columns
+              for (let j = 0; j < 2; j++) {
+                const cell = document.createElement("td");
+                const inputElement = document.createElement("input");
+                inputElement.type = "text";
+                inputElement.style.border = "1px solid black";
+                cell.appendChild(inputElement);
+                row.appendChild(cell);
+              }
+              chartTable.appendChild(row);
+            });
+          }
+      async function getRankings(div) {
+        try {
+          const response = await fetch(`https://www.robotevents.com/api/v2/events/${eventid}/divisions/${div}/rankings`, {
+            headers: {
+              'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIzIiwianRpIjoiZDNiYzU1Y2I5Y2UxZjc2NzU4ZWJhZDk1NmUwMDRkZjJkZTQ0NWViY2QzZTc0NzFhMTNmMjIxNWNlYTg3ODM4ZDY3MTU5NzUyYzQ1YmRmOTkiLCJpYXQiOjE3MjA1OTE3NzMuMTM2MzM0OSwibmJmIjoxNzIwNTkxNzczLjEzNjMzOCwiZXhwIjoyNjY3MjgwMTczLjEyMTY1NzgsInN1YiI6IjY4MzkiLCJzY29wZXMiOltdfQ.N-ZRKEpC7tYftM7J7KWsz4zIA3tEiH8jpvd3VqrOqg5VAMqq7ryZD7dzcq4USQbu1ExCFgVxudblarjy7AJZe-YhMelA3TzgFYfH7BehrMrYqCX4dQ_4HJGyWYtSXx29cvxfLAtTmXeZVrFjEpdgY63DkxOor3npD65gaSpQxFO3USSQHaA8HPTJw2l_gEkT1PDvBf4-QIwQYm3Pj_klOw7cdoJnJgziDKLsPPHfe6os6rkf6wIKszsa1O7AuAM0aYV3tXsFWcOX6m_okjmmoFpSKpFv3UQ9W9IiTr4iXKrMRhT-jV7CQwXboc9Vl8YBoDwwyV-reDbSVf_k6bVhHdV3mglMlk-EklX-iPbl88Lkedji0mB7WHQ-R7Nib4XagJm_vxHRNWIvQNleIOm5pIBCcjnWOTWF4l2zGPuybSE3w3NHncwa88Ion0hK8ktKQl8Wx1A8aJWHk0IDNLVelt_vtbhbbDRml7EFbeYJ-o2V8ZbZWY3PGklsp3q5X9A0snE4W4Sv9061sURDaV9QsB38Eyg2J6PjyP7p3rvOw903RntP4AWrWIlSyqn9ZKdHnjqQ94JWzswYNYvP86sm6GAuh_mPcXxRyYzIjAVdYuTy_mtvb38FaRDiwSG4aM9F3yHHwUjrXZ_FoEpF7bOLaVFuntUXJwkmecE-g3Fd2RU'
+            }
+          });
+          const data = await response.json();
+          data.data.reverse();
+          const rankingsHtml = data.data.map((team, index) => {
+            return `<tr>
+              <td>${index + 1}</td>
+              <td>${team.team.name}</td>
+              <td>${team.wins}</td>
+              <td>${team.losses}</td>
+              <td>${team.ties}</td>
+              <td>${team.wp}</td>
+              <td>${team.ap}</td>
+              <td>${team.sp}</td>
+              <td>${team.high_score}</td>
+              <td>${team.average_points}</td>
+              <td>${team.total_points}</td>
+            </tr>`;
+          }).join('');
+          return document.getElementById('rankings-table').innerHTML = `
+            Division ${div}
+            <table style="border-spacing: 10px;">
+              <tr>
+                <th>Rank</th>
+                <th>Team Number</th>
+                <th>Wins</th>
+                <th>Losses</th>
+                <th>Ties</th>
+                <th>WP</th>
+                <th>AP</th>
+                <th>SP</th>
+                <th>High Score</th>
+                <th>Average Points</th>
+                <th>Total Points</th>
+              </tr>
+              ${rankingsHtml}
+            </table>
+            <br>
+          `;
+        } catch (error) {
+          console.error(error);
+        }
+      }
+    </script>
+  </body>
+</html>
